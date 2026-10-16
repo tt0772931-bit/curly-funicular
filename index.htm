@@ -1,0 +1,309 @@
+إليك لعبة **مود لا نهائي** تعمل مباشرة في المتصفح. انسخ الكود في ملف باسم `index.html` ثم افتحه:
+
+````html
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>الهروب اللانهائي</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #10152b;
+      font-family: Arial, sans-serif;
+      color: white;
+      text-align: center;
+    }
+
+    #game {
+      display: block;
+      margin: auto;
+      background: linear-gradient(#162447, #1f4068);
+    }
+
+    #info {
+      position: fixed;
+      top: 10px;
+      right: 15px;
+      z-index: 2;
+      font-size: 18px;
+      line-height: 1.8;
+      text-align: right;
+    }
+
+    #message {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 3;
+    }
+
+    button {
+      padding: 12px 28px;
+      border: none;
+      border-radius: 10px;
+      background: #ffcc00;
+      color: #111;
+      font-size: 18px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #ffe066;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="info">
+  النقاط: <span id="score">0</span><br>
+  أعلى نتيجة: <span id="best">0</span>
+</div>
+
+<div id="message">
+  <h1>الهروب اللانهائي</h1>
+  <p>تحرك باستخدام الأسهم أو A و D</p>
+  <button onclick="startGame()">ابدأ اللعب</button>
+</div>
+
+<script>
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const scoreElement = document.getElementById("score");
+  const bestElement = document.getElementById("best");
+  const message = document.getElementById("message");
+
+  let width, height;
+  let player;
+  let obstacles;
+  let coins;
+  let score;
+  let speed;
+  let gameRunning = false;
+  let keys = {};
+
+  let best = Number(localStorage.getItem("bestScore")) || 0;
+  bestElement.textContent = best;
+
+  function resize() {
+    width = Math.min(window.innerWidth, 700);
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+
+  document.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+  });
+
+  document.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+  });
+
+  function startGame() {
+    player = {
+      x: width / 2 - 20,
+      y: height - 100,
+      width: 40,
+      height: 40,
+      speed: 7
+    };
+
+    obstacles = [];
+    coins = [];
+    score = 0;
+    speed = 4;
+    gameRunning = true;
+    message.style.display = "none";
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  function createObstacle() {
+    const obstacleWidth = 35 + Math.random() * 45;
+
+    obstacles.push({
+      x: Math.random() * (width - obstacleWidth),
+      y: -60,
+      width: obstacleWidth,
+      height: 30 + Math.random() * 35,
+      color: "#e94560"
+    });
+  }
+
+  function createCoin() {
+    coins.push({
+      x: 20 + Math.random() * (width - 40),
+      y: -20,
+      radius: 10
+    });
+  }
+
+  function collision(a, b) {
+    return (
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y
+    );
+  }
+
+  function update() {
+    if (keys["arrowleft"] || keys["a"]) {
+      player.x -= player.speed;
+    }
+
+    if (keys["arrowright"] || keys["d"]) {
+      player.x += player.speed;
+    }
+
+    player.x = Math.max(0, Math.min(width - player.width, player.x));
+
+    if (Math.random() < 0.025) {
+      createObstacle();
+    }
+
+    if (Math.random() < 0.018) {
+      createCoin();
+    }
+
+    obstacles.forEach(obstacle => {
+      obstacle.y += speed;
+    });
+
+    coins.forEach(coin => {
+      coin.y += speed;
+    });
+
+    obstacles = obstacles.filter(obstacle => obstacle.y < height + 80);
+    coins = coins.filter(coin => coin.y < height + 30);
+
+    for (const obstacle of obstacles) {
+      if (collision(player, obstacle)) {
+        endGame();
+        return;
+      }
+    }
+
+    coins.forEach((coin, index) => {
+      const distanceX = player.x + player.width / 2 - coin.x;
+      const distanceY = player.y + player.height / 2 - coin.y;
+      const distance = Math.sqrt(distanceX ** 2 + distanceY ** 2);
+
+      if (distance < 30) {
+        coins.splice(index, 1);
+        score += 50;
+      }
+    });
+
+    score++;
+    speed += 0.0015;
+
+    scoreElement.textContent = score;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    // خلفية متحركة
+    ctx.fillStyle = "#162447";
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 2;
+
+    for (let y = 0; y < height; y += 50) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+
+    // اللاعب
+    ctx.fillStyle = "#00d9ff";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(player.x + 8, player.y + 8, 7, 7);
+    ctx.fillRect(player.x + 25, player.y + 8, 7, 7);
+
+    // العقبات
+    obstacles.forEach(obstacle => {
+      ctx.fillStyle = obstacle.color;
+      ctx.fillRect(
+        obstacle.x,
+        obstacle.y,
+        obstacle.width,
+        obstacle.height
+      );
+    });
+
+    // العملات
+    coins.forEach(coin => {
+      ctx.beginPath();
+      ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffd700";
+      ctx.fill();
+      ctx.closePath();
+    });
+  }
+
+  function gameLoop() {
+    if (!gameRunning) return;
+
+    update();
+    draw();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  function endGame() {
+    gameRunning = false;
+
+    if (score > best) {
+      best = score;
+      localStorage.setItem("bestScore", best);
+      bestElement.textContent = best;
+    }
+
+    message.innerHTML = `
+      <h1>انتهت اللعبة</h1>
+      <p>نتيجتك: ${score}</p>
+      <p>أعلى نتيجة: ${best}</p>
+      <button onclick="startGame()">إعادة اللعب</button>
+    `;
+
+    message.style.display = "flex";
+  }
+</script>
+
+</body>
+</html>
+````
+
+اللعبة تحتوي على:
+
+- طور لعب لا نهائي.
+- عقبات تزداد سرعتها تدريجياً.
+- عملات لجمعها.
+- نظام نقاط.
+- حفظ أعلى نتيجة تلقائياً.
+- تحكم بالأسهم أو أزرار `A`
